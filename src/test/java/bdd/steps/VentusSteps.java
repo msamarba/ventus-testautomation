@@ -36,7 +36,7 @@ public class VentusSteps {
                 .fill("Nachricht", m.get("Nachricht"));
     }
 
-    @When("I accept the privacy/consent checkbox")
+    @And("I accept the privacy consent checkbox")
     public void i_accept_privacy() { contact.acceptPrivacy(); }
 
     @When("I submit the form")
