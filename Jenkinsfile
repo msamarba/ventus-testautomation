@@ -12,23 +12,25 @@ pipeline {
     maven 'Maven-3.9'
   }
 
-  parameters {
-    string(name: 'BASE_URL', defaultValue: 'https://www.ventus-itservices.de', description: 'Target base URL')
-    string(name: 'TAGS', defaultValue: '', description: 'Cucumber tag expression, e.g. @smoke or @smoke and not @wip')
-    choice(name: 'BROWSER', choices: ['chrome'], description: 'Selenium browser (extend as needed)')
-    booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Run browser headless')
-    booleanParam(name: 'PUBLISH_TO_XRAY', defaultValue: true, description: 'Upload cucumber.json to Xray')
-  }
+parameters {
+  string(name: 'BASE_URL', defaultValue: 'https://www.ventus-itservices.de', description: 'Target base URL')
+  string(name: 'TAGS', defaultValue: '', description: 'Cucumber tag expression, e.g. @smoke or @smoke and not @wip')
+  choice(name: 'BROWSER', choices: ['chrome'], description: 'Selenium browser')
+  booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Run browser headless')
+  booleanParam(name: 'PUBLISH_TO_XRAY', defaultValue: true, description: 'Upload cucumber.json to Xray')
+  string(name: 'TEST_PLAN_KEY', defaultValue: '', description: 'Optional Xray Test Plan key (e.g. VENTUS-123)')
+  string(name: 'TEST_EXEC_KEY', defaultValue: '', description: 'Optional Xray Test Execution key to append to (else new one)')
+  string(name: 'TEST_ENV', defaultValue: 'chrome-headless', description: 'Xray Test Environment name(s), comma-separated')
+  string(name: 'FIX_VERSION', defaultValue: '', description: 'Optional Jira Fix Version to stamp on Test Execution')
+}
+environment {
+  ALLURE_RESULTS   = 'target/allure-results'
+  CUC_JSON         = 'target/cucumber.json'
+  CUC_HTML_DIR     = 'target/cucumber-report/cucumber-html-reports'
+  XRAY_BASE        = 'https://xray.cloud.getxray.app/api/v2'
+  JIRA_PROJECT_KEY = 'VENTUS'
+}
 
-  environment {
-    // Allure Jenkins plugin will read results from this folder
-    ALLURE_RESULTS = 'target/allure-results'
-    CUC_JSON       = 'target/cucumber.json'
-    CUC_HTML_DIR   = 'target/cucumber-report/cucumber-html-reports'
-    // Xray Cloud (change if you use Server/DC)
-    XRAY_BASE      = 'https://xray.cloud.getxray.app/api/v2'
-    JIRA_PROJECT_KEY = 'VENTUS'
-  }
 
   stages {
     stage('Checkout') {
@@ -94,41 +96,70 @@ pipeline {
       }
     }
 
-    stage('Publish to Xray') {
-      when { allOf { expression { params.PUBLISH_TO_XRAY }; expression { fileExists(env.CUC_JSON) } } }
-      steps {
-        withCredentials([
-          string(credentialsId: 'xray-client-id', variable: 'XRAY_CLIENT_ID'),
-          string(credentialsId: 'xray-client-secret', variable: 'XRAY_CLIENT_SECRET')
-        ]) {
-          script {
-            if (isUnix()) {
-              sh """
-                TOKEN=\$(curl -s -H 'Content-Type: application/json' \
-                  --data '{ "client_id": "${XRAY_CLIENT_ID}", "client_secret": "${XRAY_CLIENT_SECRET}" }' \
-                  ${XRAY_BASE}/authenticate | tr -d '"')
+ stage('Publish to Xray') {
+   when { allOf { expression { params.PUBLISH_TO_XRAY }; expression { fileExists(env.CUC_JSON) } } }
+   steps {
+     withCredentials([
+       string(credentialsId: 'xray-client-id',    variable: 'XRAY_CLIENT_ID'),
+       string(credentialsId: 'xray-client-secret',variable: 'XRAY_CLIENT_SECRET')
+     ]) {
+       script {
+         def infoJson = """{
+           "summary": "Ventus – Selenium Execution #${env.BUILD_NUMBER}",
+           "description": "Build: ${env.BUILD_TAG}\\nJob: ${env.JOB_NAME}\\nGit: ${env.GIT_URL ?: ''} @ ${env.GIT_COMMIT ?: ''}\\nTags: ${params.TAGS ?: ''}",
+           ${params.TEST_PLAN_KEY ? "\"testPlanKey\": \"${params.TEST_PLAN_KEY}\"," : ""}
+           ${params.TEST_EXEC_KEY ? "\"testExecutionKey\": \"${params.TEST_EXEC_KEY}\"," : ""}
+           "testEnvironments": [${params.TEST_ENV.split(',').collect{ "\"${it.trim()}\"" }.join(', ')}]
+           ${params.FIX_VERSION ? ",\"fixVersion\": \"${params.FIX_VERSION}\"" : ""}
+         }"""
 
-                curl -s -H "Authorization: Bearer \$TOKEN" \
-                  -F "info={\\"fields\\":{\\"project\\":{\\"key\\":\\"${JIRA_PROJECT_KEY}\\"},\\"summary\\":\\"Ventus – Selenium Execution \$(date +%F_%T)\\"}}" \
-                  -F "results=@${CUC_JSON};type=application/json" \
-                  ${XRAY_BASE}/import/execution/cucumber/multipart
-              """
-            } else {
-              // Windows PowerShell variant
-              powershell """
-                \$body = @{ client_id='${XRAY_CLIENT_ID}'; client_secret='${XRAY_CLIENT_SECRET}' } | ConvertTo-Json
-                \$token = (Invoke-RestMethod -Method Post -Uri '${XRAY_BASE}/authenticate' -ContentType 'application/json' -Body \$body).Trim('"')
-                Invoke-RestMethod -Method Post -Uri '${XRAY_BASE}/import/execution/cucumber/multipart' `
-                  -Headers @{ Authorization = "Bearer \$token" } `
-                  -Form @{ info = '{ "fields": { "project": { "key": "${JIRA_PROJECT_KEY}" }, "summary": "Ventus – Selenium Execution $(Get-Date -Format s)" } }'
-                           results = Get-Item '${env.WORKSPACE}\\${CUC_JSON}' }
-              """
-            }
-          }
-        }
-      }
-    }
-  }
+         if (isUnix()) {
+           sh """
+             set -e
+             echo "Authenticating to Xray Cloud..."
+             TOKEN=\$(curl -sS -H 'Content-Type: application/json' \\
+               --data '{ "client_id": "${XRAY_CLIENT_ID}", "client_secret": "${XRAY_CLIENT_SECRET}" }' \\
+               ${XRAY_BASE}/authenticate | tr -d '"')
+
+             [ -n "\$TOKEN" ] || { echo "Xray auth failed"; exit 1; }
+
+             echo "Uploading results to Xray Cloud..."
+             HTTP_CODE=\$(curl -sS -o xray_resp.json -w "%{http_code}" \\
+               -H "Authorization: Bearer \$TOKEN" \\
+               -F "info=${infoJson};type=application/json" \\
+               -F "results=@${CUC_JSON};type=application/json" \\
+               ${XRAY_BASE}/import/execution/cucumber/multipart)
+
+             echo "HTTP: \$HTTP_CODE"
+             cat xray_resp.json || true
+
+             [ "\$HTTP_CODE" -ge 200 ] && [ "\$HTTP_CODE" -lt 300 ] || { echo "Xray upload failed (\$HTTP_CODE)"; exit 1; }
+
+             # Try to print Test Execution key from response, if present
+             TE_KEY=\$(jq -r '.key // empty' xray_resp.json 2>/dev/null || true)
+             if [ -n "\$TE_KEY" ]; then
+               echo "Xray Test Execution: \$TE_KEY"
+             fi
+           """
+         } else {
+           powershell """
+             \$authBody = @{ client_id='${XRAY_CLIENT_ID}'; client_secret='${XRAY_CLIENT_SECRET}' } | ConvertTo-Json
+             \$token = (Invoke-RestMethod -Method Post -Uri '${XRAY_BASE}/authenticate' -ContentType 'application/json' -Body \$authBody).Trim('\"')
+             if ([string]::IsNullOrEmpty(\$token)) { throw 'Xray auth failed' }
+
+             \$form = @{
+               info    = '${infoJson}'
+               results = Get-Item '${env.WORKSPACE}\\${CUC_JSON}'
+             }
+             \$resp = Invoke-WebRequest -Method Post -Uri '${XRAY_BASE}/import/execution/cucumber/multipart' -Headers @{ Authorization = "Bearer \$token" } -Form \$form
+             Write-Host "HTTP: " \$resp.StatusCode
+             Write-Host \$resp.Content
+           """
+         }
+       }
+     }
+   }
+ }
 
   post {
     always {
