@@ -166,4 +166,4 @@ environment {
       echo "Build finished: ${currentBuild.currentResult}"
     }
   }
-}0
+}
