@@ -41,7 +41,7 @@ environment {
       steps {
         script {
           // Compose Cucumber options
-          def cucPlugins = 'pretty,json:target/cucumber.json,html:target/cucumber-report.html,io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,summary'
+          def cucPlugins = 'pretty,json:target/cucumber.json,html:target/cucumber-report.html,io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm,junit:target/cucumber-junit.xml,summary'
           def tagOpt = params.TAGS?.trim() ? "-Dcucumber.filter.tags=\"${params.TAGS}\"" : ''
 
           if (isUnix()) {
