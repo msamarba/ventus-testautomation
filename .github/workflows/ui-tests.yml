@@ -1,0 +1,56 @@
+name: UI Tests -> Xray
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      XRAY_BASE: https://xray.cloud.getxray.app/api/v2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'   # change if your project uses 17
+
+      - name: Run Cucumber tests (headless)
+        run: mvn -B -Dheadless=true test
+
+      # Safe auth debug: verifies your secrets & shows HTTP status (no secrets printed)
+      - name: Xray auth (debug)
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        env:
+          CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+        run: |
+          set -e
+          [ -n "$CLIENT_ID" ] || { echo "ERROR: CLIENT_ID is empty"; exit 1; }
+          [ -n "$CLIENT_SECRET" ] || { echo "ERROR: CLIENT_SECRET is empty"; exit 1; }
+          HTTP=$(curl -sS -o body.txt -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
+            "$XRAY_BASE/authenticate")
+          echo "Auth HTTP=$HTTP"
+          head -c 80 body.txt; echo
+          TOKEN=$(tr -d '"' < body.txt)
+          [ "$HTTP" = "200" ] || { echo "Auth failed"; exit 1; }
+          [ -n "$TOKEN" ] || { echo "Empty token"; exit 1; }
+          echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Import results to Xray Cloud
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        run: |
+          set -e
+          INFO_JSON='{"summary":"Ventus UI E2E — GH #'"$GITHUB_RUN_NUMBER"'","testEnvironments":["chrome-headless"]}'
+          CODE=$(curl -sS -o xray_resp.json -w "%{http_code}" \
+            -H "Authorization: Bearer $XRAY_TOKEN" \
+            -F "info=$INFO_JSON;type=application/json" \
+            -F "results=@target/cucumber.json;type=application/json" \
+            "$XRAY_BASE/import/execution/cucumber/multipart")
+          echo "Import HTTP=$CODE"
+          cat xray_resp.json
+          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]
