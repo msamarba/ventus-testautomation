@@ -47,7 +47,7 @@ environment {
           if (isUnix()) {
             sh """
               mvn -B -q \
-                -Dtest=bdd.CucumberTestSuite \
+                -Dtest=bdd.CucumberTest \
                 -DbaseUrl="${params.BASE_URL}" \
                 -Dheadless=${params.HEADLESS} \
                 -Dbrowser=${params.BROWSER} \
@@ -58,7 +58,7 @@ environment {
           } else {
             bat """
               mvn -B -q ^
-                -Dtest=bdd.CucumberTestSuite ^
+                -Dtest=bdd.CucumberTest ^
                 -DbaseUrl="${params.BASE_URL}" ^
                 -Dheadless=${params.HEADLESS} ^
                 -Dbrowser=${params.BROWSER} ^

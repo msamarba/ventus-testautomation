@@ -22,19 +22,15 @@ public class ContactPage extends BasePage {
         return this;
     }
 
-    public ContactPage submit(){
-        try {
-            driver.findElement(By.xpath("//button[.//text()[contains(.,'Senden')] or contains(.,'Senden')]")).click();
-        } catch (NoSuchElementException e) {
-            driver.findElement(By.tagName("button")).click();
-        }
-        return this;
+    public void submit(){
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", driver.findElement(By.xpath("//button[@aria-label='Senden']")));
+            driver.findElement(By.xpath("//button[@aria-label='Senden']")).click();
     }
 
     public boolean confirmationVisible(){
         try {
             wait.until(ExpectedConditions.or(
-                    ExpectedConditions.presenceOfElementLocated(By.xpath("//*[contains(.,'Vielen Dank') or contains(.,'Danke')]")),
+                    ExpectedConditions.presenceOfElementLocated(By.xpath("//*[contains(.,'Verifizierung')]")),
                     ExpectedConditions.presenceOfElementLocated(By.xpath("//*[contains(.,'erfolgreich')]"))
             ));
             return true;

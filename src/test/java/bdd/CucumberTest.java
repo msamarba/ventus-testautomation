@@ -14,9 +14,9 @@ import org.junit.platform.suite.api.*;
                 key = io.cucumber.junit.platform.engine.Constants.GLUE_PROPERTY_NAME,
                 value = "bdd"
         ),
-        @ConfigurationParameter(
-                key = io.cucumber.junit.platform.engine.Constants.FILTER_TAGS_PROPERTY_NAME,
-                value = "not @wip"
-        )
+//        @ConfigurationParameter(
+//                key = io.cucumber.junit.platform.engine.Constants.FILTER_TAGS_PROPERTY_NAME,
+//                value = "not @wip"
+//        )
 })
-public class CucumberTestSuite {}
+public class CucumberTest {}

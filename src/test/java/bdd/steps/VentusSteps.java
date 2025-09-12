@@ -31,8 +31,7 @@ public class VentusSteps {
         contact
                 .fill("Vorname",   m.get("Vorname"))
                 .fill("Nachname",  m.get("Nachname"))
-                .fill("E-Mail",    m.get("E-Mail"))
-                .fill("Betreff",   m.get("Betreff"))
+                .fill("Email",    m.get("Email"))
                 .fill("Nachricht", m.get("Nachricht"));
     }
 
@@ -40,7 +39,8 @@ public class VentusSteps {
     public void i_accept_privacy() { contact.acceptPrivacy(); }
 
     @When("I submit the form")
-    public void i_submit() { contact.submit(); }
+    public void i_submit() {
+        contact.submit(); }
 
     @Then("I see a confirmation message")
     public void i_see_confirmation() {

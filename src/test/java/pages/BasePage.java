@@ -21,8 +21,8 @@ public abstract class BasePage {
 
     protected WebElement inputNearLabel(String label){
         return driver.findElement(By.xpath(
-                "//label[contains(.,'" + label + "')]/following::input[1] | " +
-                        "//label[contains(.,'" + label + "')]/following::textarea[1]"
+                "//label[contains(.,'" + label + "')]/../div/input | " +
+                        "//label[contains(.,'" + label + "')]/following::textarea"
         ));
     }
 }

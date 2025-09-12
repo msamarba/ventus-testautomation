@@ -21,7 +21,7 @@ public class Hooks {
     public void openBrowser() {
         ChromeOptions opts = new ChromeOptions();
         // headless for CI; remove if you want to see the browser:
-        opts.addArguments("--headless=new","--no-sandbox","--disable-dev-shm-usage");
+        opts.addArguments("--no-sandbox","--disable-dev-shm-usage");
         WebDriver d = new ChromeDriver(opts);
         d.manage().timeouts().implicitlyWait(Duration.ofSeconds(2));
         d.manage().window().setSize(new Dimension(1600, 1000));
