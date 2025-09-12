@@ -1,44 +1,44 @@
-// Hooks.java
-import io.cucumber.java.Before;
-import io.cucumber.java.After;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.WebDriver;
+package bdd;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.UUID;
+import io.cucumber.java.*;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.*;
+import org.openqa.selenium.chrome.ChromeDriver;
+import io.qameta.allure.Allure;
+
+import java.time.Duration;
 
 public class Hooks {
-    public static WebDriver driver;
-    private Path tempProfileDir;
+    public static ThreadLocal<WebDriver> DRIVER = new ThreadLocal<WebDriver>();
+
+    public static WebDriver driver() { return DRIVER.get(); }
+
+    @BeforeAll
+    public static void setupClass() {
+    }
 
     @Before
-    public void setUp() throws Exception {
+    public void openBrowser() {
         ChromeOptions opts = new ChromeOptions();
-        // stability flags for CI:
-        opts.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
-                "--no-first-run", "--no-default-browser-check",
-                "--disable-extensions", "--disable-background-networking",
-                "--remote-debugging-port=0");
-
-        // allow override from CI, otherwise create a unique temp dir
-        String ud = System.getProperty("chrome.userDataDir");
-        if (ud == null || ud.isBlank()) {
-            tempProfileDir = Files.createTempDirectory("chrome-profile-" + UUID.randomUUID());
-            ud = tempProfileDir.toAbsolutePath().toString();
-        }
-        opts.addArguments("--user-data-dir=" + ud);
-
-        driver = new ChromeDriver(opts);
+        // headless for CI; remove if you want to see the browser:
+        opts.addArguments("--headless=new","--no-sandbox","--disable-dev-shm-usage");
+        WebDriver d = new ChromeDriver(opts);
+        d.manage().timeouts().implicitlyWait(Duration.ofSeconds(2));
+        d.manage().window().setSize(new Dimension(1600, 1000));
+        DRIVER.set(d);
     }
 
     @After
-    public void tearDown() {
-        try { if (driver != null) driver.quit(); } catch (Exception ignored) {}
-        // optional: cleanup temp profile
-        if (tempProfileDir != null) {
-            try { org.openqa.selenium.io.FileHandler.delete(tempProfileDir.toFile()); } catch (Exception ignored) {}
+    public void quitBrowser(Scenario s) {
+        try {
+            if (s.isFailed()) {
+                byte[] png = ((TakesScreenshot) driver()).getScreenshotAs(OutputType.BYTES);
+                Allure.getLifecycle().addAttachment("failure", "image/png", "png", png);
+            }
+        } catch (Exception ignored) {}
+        if (driver() != null) {
+            driver().quit();
+            DRIVER.remove();
         }
     }
 }
