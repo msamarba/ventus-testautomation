@@ -72,6 +72,8 @@ jobs:
 
       - name: Import results to Xray Cloud
         if: ${{ hashFiles('target/cucumber.json') != '' }}
+        env:
+          XRAY_BASE: https://xray.cloud.getxray.app/api/v2
         run: |
           set -e
           INFO_JSON='{"summary":"Ventus UI E2E — GH #'"$GITHUB_RUN_NUMBER"'","testEnvironments":["chrome-headless"]}'
