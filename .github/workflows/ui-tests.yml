@@ -28,14 +28,14 @@ jobs:
           CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
         run: |
           set -e
-          [ -n "$CLIENT_ID" ] || { echo "ERROR: CLIENT_ID is empty"; exit 1; }
-          [ -n "$CLIENT_SECRET" ] || { echo "ERROR: CLIENT_SECRET is empty"; exit 1; }
+          echo "Has CLIENT_ID? $([ -n "$CLIENT_ID" ] && echo yes || echo no)"
+          echo "Has CLIENT_SECRET? $([ -n "$CLIENT_SECRET" ] && echo yes || echo no)"
+          # If either says 'no', fix repo secrets / environment binding, then re-run.
           HTTP=$(curl -sS -o body.txt -w "%{http_code}" \
-            -H "Content-Type: application/json" \
-            -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
-            "$XRAY_BASE/authenticate")
+          -H "Content-Type: application/json" \
+          -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
+          "$XRAY_BASE/authenticate")
           echo "Auth HTTP=$HTTP"
-          head -c 80 body.txt; echo
           TOKEN=$(tr -d '"' < body.txt)
           [ "$HTTP" = "200" ] || { echo "Auth failed"; exit 1; }
           [ -n "$TOKEN" ] || { echo "Empty token"; exit 1; }

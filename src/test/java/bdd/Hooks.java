@@ -22,7 +22,7 @@ public class Hooks {
     public void openBrowser() throws Exception {
         ChromeOptions opts = new ChromeOptions();
         opts.addArguments(
-                "--headless=new","--no-sandbox","--disable-dev-shm-usage",
+                "--no-sandbox","--disable-dev-shm-usage",
                 "--no-first-run","--no-default-browser-check",
                 "--disable-extensions","--disable-background-networking",
                 "--remote-debugging-port=0"
