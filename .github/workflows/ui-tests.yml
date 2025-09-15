@@ -1,66 +1,93 @@
-- name: Show generated reports
-  run: |
-    ls -la target || true
-    echo "---- cucumber.json size ----"
-    test -f target/cucumber.json && wc -c target/cucumber.json || echo "NO cucumber.json"
-    echo "---- first 80 chars ----"
-    test -f target/cucumber.json && head -c 80 target/cucumber.json && echo || true
+name: "UI Tests -> Xray"
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
-# 🔎 Deep-inspect cucumber.json BEFORE auth/import
-- name: Inspect cucumber.json (structure)
-  if: ${{ hashFiles('target/cucumber.json') != '' }}
-  run: |
-    sudo apt-get update >/dev/null 2>&1 || true
-    sudo apt-get install -y jq >/dev/null 2>&1 || true
-    echo "Top-level count:"; jq 'length' target/cucumber.json
-    echo "URIs:"; jq -r '.[] | .uri // "NO-URI"' target/cucumber.json
-    echo "First element meta:"; jq '.[0] | {has_uri: has("uri"), elements_len: (.elements|length)}' target/cucumber.json
-    echo "First scenario meta:"; jq '.[0].elements[0] | {type, name, has_steps: has("steps"), step_count: (.steps|length // 0), statuses: (.steps[]?.result.status)}' target/cucumber.json
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      XRAY_BASE: https://xray.cloud.getxray.app/api/v2
+    steps:
+      - uses: actions/checkout@v4
 
-# 🔐 Get XRAY_TOKEN (must run before import)
-- name: Xray auth (debug)
-  if: ${{ hashFiles('target/cucumber.json') != '' }}
-  env:
-    XRAY_BASE: https://xray.cloud.getxray.app/api/v2
-    CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
-    CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
-  run: |
-    set -e
-    [ -n "$CLIENT_ID" ] || { echo "ERROR: CLIENT_ID empty"; exit 1; }
-    [ -n "$CLIENT_SECRET" ] || { echo "ERROR: CLIENT_SECRET empty"; exit 1; }
-    HTTP=$(curl -sS -o body.txt -w "%{http_code}" \
-      -H "Content-Type: application/json" \
-      -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
-      "$XRAY_BASE/authenticate")
-    echo "Auth HTTP=$HTTP"
-    head -c 60 body.txt; echo
-    TOKEN=$(tr -d '"\r\n' < body.txt)
-    [ "$HTTP" = "200" ] || { echo "Auth failed"; exit 1; }
-    [ ${#TOKEN} -gt 20 ] || { echo "Token looks empty/short"; exit 1; }
-    echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'   # change if your project uses 17
 
-- name: Import results to Xray Cloud (multipart, with file parts)
-  if: ${{ hashFiles('target/cucumber.json') != '' }}
-  env:
-    XRAY_BASE: https://xray.cloud.getxray.app/api/v2
-    JIRA_PROJECT_KEY: KAN
-  run: |
-    set -e
-    cat > info.json <<JSON
-    {
-      "fields": {
-        "project": { "key": "${JIRA_PROJECT_KEY}" },
-        "summary": "Ventus UI E2E - GH #${GITHUB_RUN_NUMBER}",
-        "description": "Workflow: ${GITHUB_WORKFLOW}\nRun: ${GITHUB_RUN_ID}\nCommit: ${GITHUB_SHA}\nBranch: ${GITHUB_REF_NAME}"
-      },
-      "testEnvironments": ["chrome-headless"]
-    }
-    JSON
-    CODE=$(curl -sS -o xray_resp.json -w "%{http_code}" \
-      -H "Authorization: Bearer $XRAY_TOKEN" \
-      -F "info=@info.json;type=application/json" \
-      -F "results=@target/cucumber.json;type=application/json" \
-      "$XRAY_BASE/import/execution/cucumber/multipart")
-    echo "Import HTTP=$CODE"
-    cat xray_resp.json
-    test "$CODE" -ge 200 -a "$CODE" -lt 300
+      - name: Cleanup stray Chrome (best-effort)
+        run: |
+          pkill -f chrome || true
+          pkill -f chromedriver || true
+
+      - name: Run Cucumber tests (headless)
+        run: mvn -B test "-Dtest=bdd.CucumberTest" "-Dheadless=true" "-Dcucumber.filter.tags="
+
+      - name: Show generated reports
+        run: |
+          ls -la target || true
+          echo "---- cucumber.json size ----"
+          test -f target/cucumber.json && wc -c target/cucumber.json || echo "NO cucumber.json"
+          echo "---- first 80 chars ----"
+          test -f target/cucumber.json && head -c 80 target/cucumber.json && echo || true
+
+      # 🔎 Deep-inspect cucumber.json BEFORE auth/import
+      - name: Inspect cucumber.json (structure)
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        run: |
+          sudo apt-get update >/dev/null 2>&1 || true
+          sudo apt-get install -y jq >/dev/null 2>&1 || true
+          echo "Top-level count:"; jq 'length' target/cucumber.json
+          echo "URIs:"; jq -r '.[] | .uri // "NO-URI"' target/cucumber.json
+          echo "First element meta:"; jq '.[0] | {has_uri: has("uri"), elements_len: (.elements|length)}' target/cucumber.json
+          echo "First scenario meta:"; jq '.[0].elements[0] | {type, name, has_steps: has("steps"), step_count: (.steps|length // 0), statuses: (.steps[]?.result.status)}' target/cucumber.json
+
+      # 🔐 Get XRAY_TOKEN (must run before import)
+      - name: Xray auth (debug)
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        env:
+          XRAY_BASE: https://xray.cloud.getxray.app/api/v2
+          CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+        run: |
+          set -e
+          [ -n "$CLIENT_ID" ] || { echo "ERROR: CLIENT_ID empty"; exit 1; }
+          [ -n "$CLIENT_SECRET" ] || { echo "ERROR: CLIENT_SECRET empty"; exit 1; }
+          HTTP=$(curl -sS -o body.txt -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
+            "$XRAY_BASE/authenticate")
+          echo "Auth HTTP=$HTTP"
+          head -c 60 body.txt; echo
+          TOKEN=$(tr -d '"\r\n' < body.txt)
+          [ "$HTTP" = "200" ] || { echo "Auth failed"; exit 1; }
+          [ ${#TOKEN} -gt 20 ] || { echo "Token looks empty/short"; exit 1; }
+          echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Import results to Xray Cloud (multipart, with file parts)
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        env:
+          XRAY_BASE: https://xray.cloud.getxray.app/api/v2
+          JIRA_PROJECT_KEY: KAN
+        run: |
+          set -e
+          cat > info.json <<JSON
+          {
+            "fields": {
+              "project": { "key": "${JIRA_PROJECT_KEY}" },
+              "summary": "Ventus UI E2E - GH #${GITHUB_RUN_NUMBER}",
+              "description": "Workflow: ${GITHUB_WORKFLOW}\nRun: ${GITHUB_RUN_ID}\nCommit: ${GITHUB_SHA}\nBranch: ${GITHUB_REF_NAME}"
+            },
+            "testEnvironments": ["chrome-headless"]
+          }
+          JSON
+          CODE=$(curl -sS -o xray_resp.json -w "%{http_code}" \
+            -H "Authorization: Bearer $XRAY_TOKEN" \
+            -F "info=@info.json;type=application/json" \
+            -F "results=@target/cucumber.json;type=application/json" \
+            "$XRAY_BASE/import/execution/cucumber/multipart")
+          echo "Import HTTP=$CODE"
+          cat xray_resp.json
+          test "$CODE" -ge 200 -a "$CODE" -lt 300
