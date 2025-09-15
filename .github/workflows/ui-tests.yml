@@ -18,7 +18,7 @@ jobs:
           java-version: '21'   # change if your project uses 17
 
       - name: Run Cucumber tests (headless)
-        run: mvn -B -Dheadless=true test
+        run: mvn -B -Dheadless=true -Dtest=bdd.CucumberTestSuite
 
       - name: Cleanup stray Chrome (best-effort)
         run: |
