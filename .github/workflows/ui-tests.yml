@@ -25,14 +25,6 @@ jobs:
             pkill -f chrome || true
             kill -f chromedriver || true
 
-      - name: Run Cucumber tests (headless)
-        env:
-          CHROME_USER_DIR: ${{ runner.temp }}/chrome-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-            m -rf "$CHROME_USER_DIR" || true
-            mvn -B -Dheadless=true -Dtest=bdd.CucumberTestSuite \
-                  -Dchrome.userDataDir="$CHROME_USER_DIR" test
-
       # Safe auth debug: verifies your secrets & shows HTTP status (no secrets printed)
       - name: Xray auth (debug)
         if: ${{ hashFiles('target/cucumber.json') != '' }}
