@@ -23,7 +23,7 @@ jobs:
           pkill -f chromedriver || true
 
       - name: Run Cucumber tests (headless)
-        run: mvn -B test "-Dtest=bdd.CucumberTest" "-Dheadless=true"
+        run: mvn -B test "-Dtest=bdd.CucumberTest" "-Dheadless=true" "-Dcucumber.filter.tags="
 
       - name: Show generated reports
         run: |
