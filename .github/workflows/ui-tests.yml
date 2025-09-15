@@ -1,4 +1,4 @@
-name: UI Tests -> Xray
+name: "UI Tests -> Xray"
 on:
   push:
   pull_request:
@@ -17,34 +17,13 @@ jobs:
           distribution: temurin
           java-version: '21'   # change if your project uses 17
 
-      - name: Run Cucumber tests (headless)
-        run: mvn -B -Dheadless=true -Dtest=bdd.CucumberTestSuite
-
       - name: Cleanup stray Chrome (best-effort)
         run: |
-            pkill -f chrome || true
-            kill -f chromedriver || true
+          pkill -f chrome || true
+          pkill -f chromedriver || true
 
-      # Safe auth debug: verifies your secrets & shows HTTP status (no secrets printed)
-      - name: Xray auth (debug)
-        if: ${{ hashFiles('target/cucumber.json') != '' }}
-        env:
-          CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
-        run: |
-          set -e
-          echo "Has CLIENT_ID? $([ -n "$CLIENT_ID" ] && echo yes || echo no)"
-          echo "Has CLIENT_SECRET? $([ -n "$CLIENT_SECRET" ] && echo yes || echo no)"
-          # If either says 'no', fix repo secrets / environment binding, then re-run.
-          HTTP=$(curl -sS -o body.txt -w "%{http_code}" \
-          -H "Content-Type: application/json" \
-          -d "{\"client_id\":\"$CLIENT_ID\",\"client_secret\":\"$CLIENT_SECRET\"}" \
-          "$XRAY_BASE/authenticate")
-          echo "Auth HTTP=$HTTP"
-          TOKEN=$(tr -d '"' < body.txt)
-          [ "$HTTP" = "200" ] || { echo "Auth failed"; exit 1; }
-          [ -n "$TOKEN" ] || { echo "Empty token"; exit 1; }
-          echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+      - name: Run Cucumber tests (headless)
+        run:  mvn -B test "-Dtest=bdd.CucumberTest" "-Dheadless=true"
 
       - name: Show generated reports
         run: |
@@ -54,10 +33,10 @@ jobs:
           echo "---- first 80 chars ----"
           test -f target/cucumber.json && head -c 80 target/cucumber.json && echo || true
 
+      # Safe auth debug: verifies your secrets & gets a token
       - name: Xray auth (debug)
         if: ${{ hashFiles('target/cucumber.json') != '' }}
         env:
-          XRAY_BASE: https://xray.cloud.getxray.app/api/v2
           CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
         run: |
@@ -75,18 +54,25 @@ jobs:
           [ -n "$TOKEN" ] || { echo "Empty token"; exit 1; }
           echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Import results to Xray Cloud
+      - name: Import results to Xray Cloud (multipart, with file parts)
         if: ${{ hashFiles('target/cucumber.json') != '' }}
-        env:
-          XRAY_BASE: https://xray.cloud.getxray.app/api/v2
         run: |
           set -e
-          INFO_JSON='{"summary":"Ventus UI E2E — GH #'"$GITHUB_RUN_NUMBER"'","testEnvironments":["chrome-headless"]}'
+          echo "cucumber.json size: $(wc -c < target/cucumber.json)"
+
+          # Build info.json on disk (file form part is the most reliable)
+          cat > info.json <<'JSON'
+          {
+            "summary": "Ventus UI E2E - GH run",
+            "testEnvironments": ["chrome-headless"]
+          }
+          JSON
+
           CODE=$(curl -sS -o xray_resp.json -w "%{http_code}" \
             -H "Authorization: Bearer $XRAY_TOKEN" \
-            -F "info=$INFO_JSON;type=application/json" \
+            -F "info=@info.json;type=application/json" \
             -F "results=@target/cucumber.json;type=application/json" \
             "$XRAY_BASE/import/execution/cucumber/multipart")
           echo "Import HTTP=$CODE"
           cat xray_resp.json
-          [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]
+          test "$CODE" -ge 200 -a "$CODE" -lt 300
