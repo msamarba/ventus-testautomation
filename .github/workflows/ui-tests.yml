@@ -56,6 +56,16 @@ jobs:
           echo "XRAY_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           echo "Token length: ${#TOKEN}"
 
+      - name: Inspect cucumber.json (structure)
+        if: ${{ hashFiles('target/cucumber.json') != '' }}
+        run: |
+            sudo apt-get update && sudo apt-get install -y jq >/dev/null 2>&1 || true
+            echo "Size: $(wc -c < target/cucumber.json)"
+            echo "First 300 chars:"; head -c 300 target/cucumber.json; echo
+            # Count scenarios in Cucumber JSON (Cucumber JVM v7)
+            echo "Scenario count:"
+            jq '[.. | objects | select(.type=="scenario")] | length' target/cucumber.json
+
       - name: Import results to Xray Cloud (multipart, with file parts)
         if: ${{ hashFiles('target/cucumber.json') != '' }}
         env:
