@@ -1,5 +1,6 @@
 Feature: Ventus contact form
 
+  @XSP-58
   Scenario: Submit the contact form on the German site
     Given I open "https://www.ventus-itservices.de/"
     And I navigate to the "Kontakt" section

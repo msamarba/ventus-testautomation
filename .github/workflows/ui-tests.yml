@@ -70,7 +70,7 @@ jobs:
         if: ${{ hashFiles('target/cucumber.json') != '' }}
         env:
           XRAY_BASE: https://xray.cloud.getxray.app/api/v2
-          JIRA_PROJECT_KEY: KAN
+          JIRA_PROJECT_KEY: XSP
         run: |
           set -e
           cat > info.json <<JSON
