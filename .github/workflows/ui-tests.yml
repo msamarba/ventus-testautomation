@@ -70,45 +70,39 @@ jobs:
         if: ${{ hashFiles('target/cucumber.json') != '' }}
         env:
           XRAY_BASE: https://xray.cloud.getxray.app/api/v2
-          JIRA_PROJECT_KEY: XSP               # <-- confirm your project key
-          # If your Jira uses a localized issue type name, prefer ID:
-          # TE_ISSUE_TYPE_ID: "10001"
+          JIRA_PROJECT_KEY: XSP
+          TE_ISSUE_TYPE_NAME: "Test Execution"   # if your UI shows German, try: "Testausführung"
         run: |
           set -e
           sudo apt-get update >/dev/null 2>&1 || true
           sudo apt-get install -y jq >/dev/null 2>&1 || true
-          
+
           SUMMARY="Ventus UI E2E - GH #${GITHUB_RUN_NUMBER}"
           DESC="Workflow: ${GITHUB_WORKFLOW}\nRun: ${GITHUB_RUN_ID}\nCommit: ${GITHUB_SHA}\nBranch: ${GITHUB_REF_NAME}"
-          
-          # Build a VALID info.json via jq (avoids all quoting/escaping issues)
+
           jq -n \
             --arg proj "${JIRA_PROJECT_KEY}" \
             --arg summary "$SUMMARY" \
             --arg desc "$DESC" \
+            --arg itname "${TE_ISSUE_TYPE_NAME}" \
             --argjson envs '["chrome-headless"]' \
             '{
                fields: {
                  project: { key: $proj },
                  summary: $summary,
-                 issuetype: { id: env.TE_ISSUE_TYPE_ID }
-                 ,
+                 issuetype: { name: $itname },
                  description: $desc
                },
                testEnvironments: $envs
              }' > info.json
-          
+
           echo "info.json:"; cat info.json
-          jq . info.json >/dev/null  # validate JSON
-          
+
           CODE=$(curl -sS -o xray_resp.json -w "%{http_code}" \
             -H "Authorization: Bearer $XRAY_TOKEN" \
             -F "info=@info.json;type=application/json" \
             -F "results=@target/cucumber.json;type=application/json" \
             "$XRAY_BASE/import/execution/cucumber/multipart")
-          
           echo "Import HTTP=$CODE"
           cat xray_resp.json
           test "$CODE" -ge 200 -a "$CODE" -lt 300
-     
-     
