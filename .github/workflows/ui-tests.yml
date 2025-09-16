@@ -82,7 +82,7 @@ jobs:
               "description": "Workflow: ${GITHUB_WORKFLOW}\nRun: ${GITHUB_RUN_ID}\nCommit: ${GITHUB_SHA}\nBranch: ${GITHUB_REF_NAME}"
             },
             "testEnvironments": ["chrome-headless"]
-            /* "testPlanKey": "KAN-58" */
+            /* "testPlanKey": "XSP-58" */
           }
           JSON
           
