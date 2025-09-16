@@ -70,7 +70,7 @@ jobs:
         if: ${{ hashFiles('target/cucumber.json') != '' }}
         env:
           XRAY_BASE: https://xray.cloud.getxray.app/api/v2
-          JIRA_PROJECT_KEY: KAN               # <-- confirm your project key
+          JIRA_PROJECT_KEY: XSP               # <-- confirm your project key
           # If your Jira uses a localized issue type name, prefer ID:
           # TE_ISSUE_TYPE_ID: "10001"
         run: |
@@ -91,7 +91,7 @@ jobs:
                fields: {
                  project: { key: $proj },
                  summary: $summary,
-                 issuetype: { name: "Test Execution" }    # or: issuetype: { id: env.TE_ISSUE_TYPE_ID }
+                 issuetype: { id: env.TE_ISSUE_TYPE_ID }
                  ,
                  description: $desc
                },
